@@ -3,6 +3,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
 from models.base_model import BaseModel
+from pathlib import Path
 
 class LogisticModel(BaseModel):
     def __init__(self):
@@ -21,6 +22,27 @@ class LogisticModel(BaseModel):
 
     def save(self, path):
         joblib.dump(self.model, path)
+
+    @classmethod
+    def load(cls, path):
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Model file not found: {path}")
+
+        payload = joblib.load(path)
+        inst = cls.__new__(cls)
+
+        if not isinstance(payload, dict):
+            inst.model = payload
+            return inst
+
+        for key in ("model", "estimator", "sk_model"):
+            if key in payload:
+                inst.model = payload[key]
+                return inst
+
+        inst.model = payload
+        return inst
 
     def __str__(self):
         return "LogisticModel"

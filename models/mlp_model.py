@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
 import joblib
 import os
+from pathlib import Path
 
 from models.base_model import BaseModel
 
@@ -87,6 +88,34 @@ class MLPModel(BaseModel):
 
     def save(self, path):
         torch.save(self.model.state_dict(), path)
+
+    @classmethod
+    def load(cls, path, device=None):
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Model file not found: {path}")
+
+        checkpoint = torch.load(
+            path,
+            map_location=device or ("cuda" if torch.cuda.is_available() else "cpu")
+        )
+
+        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            state = checkpoint["model_state_dict"]
+            input_dim = checkpoint.get("input_dim", None)
+        else:
+            state = checkpoint
+            input_dim = None
+
+        if input_dim is None:
+            raise ValueError("Checkpoint missing 'input_dim'.")
+
+        inst = cls(input_dim=input_dim)
+        inst.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        inst.model.to(inst.device)
+        inst.model.load_state_dict(state)
+        inst.model.eval()
+        return inst
 
     def __str__(self):
         return "MLPModel"
