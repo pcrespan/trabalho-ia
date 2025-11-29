@@ -11,7 +11,7 @@ import pandas as pd
 
 from app.qwen_3 import get_model
 from app.qwen_3 import answer
-
+from app.feedback import save_feedback_row
 from app.constants import FEATURE_COLUMNS, CATEGORICAL_OPTIONS, NUMERIC_RANGES
 from app.utils import find_preprocessor_path, load_preprocessor, validate_row, load_models_via_load_method, predict_all
 
@@ -69,9 +69,17 @@ if st.button("Predict"):
         st.subheader("Previsão dos modelos")
         st.table(results_df.set_index("model"))
         model, tokenizer = get_model()
-
         st.markdown("## Análise via LLM")
         with st.spinner("Carregando análise da LLM"):
-            st.write(answer(model, tokenizer, results_df, input_df))
+            analysis = answer(model, tokenizer, results_df, input_df)
+            st.write(analysis)
+        st.markdown("### Feedback")
+        chosen_label = st.selectbox("Qual classificação será considerada?", ["Good", "Bad"], index=0)
+        model_wrong = st.selectbox("O modelo errou na classificação?", ["Não", "Sim"], index=0)
+        if st.button("Enviar feedback"):
+            input_row = {col: input_df.iloc[0][col] for col in input_df.columns}
+            if model_wrong == "Sim":
+                save_feedback_row(input_row, chosen_label)
+                st.success("Feedback registrado: modelo marcado como erro e linha adicionada ao CSV de treino.")
     except Exception as exc:
         st.error(f"Prediction failed: {exc}")
