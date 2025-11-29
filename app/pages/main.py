@@ -15,7 +15,7 @@ from app.qwen_3 import answer
 from app.constants import FEATURE_COLUMNS, CATEGORICAL_OPTIONS, NUMERIC_RANGES
 from app.utils import find_preprocessor_path, load_preprocessor, validate_row, load_models_via_load_method, predict_all
 
-st.set_page_config(page_title="Credit Risk Prediction", layout="centered")
+st.set_page_config(page_title="Análise de Risco de Crédito", layout="centered")
 
 def make_input_row() -> pd.DataFrame:
     st.sidebar.header("Informações do Cliente")
@@ -66,12 +66,12 @@ if not models:
 if st.button("Predict"):
     try:
         results_df = predict_all(preprocessor, models, input_df)
-        st.subheader("Model predictions")
+        st.subheader("Previsão dos modelos")
         st.table(results_df.set_index("model"))
         model, tokenizer = get_model()
 
-        st.markdown("## LLM Analysis")
-        with st.spinner("Loading LLM analysis"):
+        st.markdown("## Análise via LLM")
+        with st.spinner("Carregando análise da LLM"):
             st.write(answer(model, tokenizer, results_df, input_df))
     except Exception as exc:
         st.error(f"Prediction failed: {exc}")
