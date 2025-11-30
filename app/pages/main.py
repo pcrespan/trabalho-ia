@@ -6,9 +6,13 @@ project_root = _this_file.parents[2]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+import os
 import streamlit as st
 import pandas as pd
-
+import joblib
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
 from app.feedback import save_feedback_row
 from app.train import train_and_persist_models
 from app.constants import FEATURE_COLUMNS, CATEGORICAL_OPTIONS, NUMERIC_RANGES
@@ -52,7 +56,7 @@ def make_input_row() -> pd.DataFrame:
     return pd.DataFrame([inputs], columns=FEATURE_COLUMNS)
 
 st.title("Análise de Risco de Crédito")
-st.write("Ao preencher os dados na coluna à esquerda, os três modelos (Ensemble, MLP e Regressão) deverão apresentar sua predição para definir se o cliente é de alto ou baixo risco.")
+st.write("Ao preencher os dados na coluna à esquerda, os dois modelos (Ensemble e Regressão) deverão apresentar sua predição para definir se o cliente é de alto ou baixo risco.")
 
 input_df = make_input_row()
 valid, msg = validate_row(input_df)
@@ -70,7 +74,7 @@ preprocessor = load_preprocessor(preproc_path)
 
 models = load_models_via_load_method()
 if not models:
-    st.error("Modelos não encontrados. Coloque logistic.pkl, random_forest.pkl e mlp.pt em models / subfolders.")
+    st.error("Modelos não encontrados. Coloque logistic.pkl, random_forest.pkl em models / subfolders.")
     st.stop()
 
 if st.button("Analisar", key="analyze"):
@@ -87,11 +91,6 @@ if st.session_state["show_all"]:
     if results_df is not None:
         st.subheader("Previsão dos modelos")
         st.table(results_df.set_index("model"))
-    st.markdown("## Análise via LLM")
-    if st.session_state.get("llm_analysis"):
-        st.write(st.session_state["llm_analysis"])
-    else:
-        st.write("Nenhuma análise disponível.")
 
     st.markdown("### Feedback")
     chosen_label = st.selectbox("Qual classificação será considerada?", ["Good", "Bad"], index=0, key="label_choice")
@@ -127,5 +126,66 @@ if st.button("Retrain models", key="retrain"):
                 models = load_models_via_load_method()
             except Exception:
                 st.error("Não foi possível carregar os modelos.")
+            try:
+                df = pd.read_csv(str(training_path), sep=';')
+                if "Creditability" not in df.columns:
+                    st.error("training csv não contém coluna 'Creditability'")
+                else:
+                    X = df[FEATURE_COLUMNS].copy()
+                    y_raw = df["Creditability"].astype(str).copy()
+                    models_dir = Path(os.environ.get("MODELS_DIR", "../train_pipeline/models"))
+                    le_path = models_dir / "label_encoder.pkl"
+                    if le_path.exists():
+                        label_encoder = joblib.load(le_path)
+                        try:
+                            y = label_encoder.transform(y_raw)
+                        except Exception:
+                            y = pd.to_numeric(y_raw, errors='coerce').fillna(0).astype(int)
+                    else:
+                        y = pd.to_numeric(y_raw, errors='coerce').fillna(0).astype(int)
+                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+                    X_train_proc = preprocessor.transform(X_train)
+                    X_test_proc = preprocessor.transform(X_test)
+                    logistic_path = models_dir / "regression" / "logistic.pkl"
+                    rf_path = models_dir / "ensemble" / "random_forest.pkl"
+                    loaded = {}
+                    if logistic_path.exists():
+                        loaded["LogisticRegression"] = joblib.load(logistic_path)
+                    if rf_path.exists():
+                        loaded["RandomForest"] = joblib.load(rf_path)
+                    train_scores = {}
+                    test_scores = {}
+                    cms = {}
+                    for name, m in loaded.items():
+                        y_train_pred = m.predict(X_train_proc)
+                        y_test_pred = m.predict(X_test_proc)
+                        train_scores[name] = accuracy_score(y_train, y_train_pred)
+                        test_scores[name] = accuracy_score(y_test, y_test_pred)
+                        cm = confusion_matrix(y_test, y_test_pred, labels=sorted(list(set(y_test))))
+                        cms[name] = (cm, sorted(list(set(y_test))))
+                    fig, ax = plt.subplots(figsize=(8, 5))
+                    names = list(train_scores.keys())
+                    train_vals = [train_scores[n] for n in names]
+                    test_vals = [test_scores[n] for n in names]
+                    x = range(len(names))
+                    ax.bar([i - 0.2 for i in x], train_vals, width=0.4)
+                    ax.bar([i + 0.2 for i in x], test_vals, width=0.4)
+                    ax.set_xticks(list(x))
+                    ax.set_xticklabels(names)
+                    ax.set_ylabel("Acurácia")
+                    ax.set_ylim(0, 1)
+                    ax.legend(["train", "test"])
+                    st.pyplot(fig)
+                    st.write("Acurácias (treino / teste):")
+                    for n in names:
+                        st.write(f"{n}: {train_scores[n]:.4f} / {test_scores[n]:.4f}")
+                    for n, (cm, labels) in cms.items():
+                        fig2, ax2 = plt.subplots(figsize=(4, 4))
+                        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+                        disp.plot(ax=ax2)
+                        ax2.set_title(n)
+                        st.pyplot(fig2)
+            except Exception as exc:
+                st.error(f"Falha ao calcular métricas: {exc}")
     except Exception as exc:
         st.error(f"Retrain failed: {exc}")
