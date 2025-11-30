@@ -117,7 +117,7 @@ if st.session_state["show_all"]:
             st.info("Feedback não registrado porque o modelo não foi marcado como erro.")
 
 st.markdown("### Treinar modelos com training_data.csv")
-csv_path = project_root / "training_data.csv"
+csv_path = project_root / "data/training_data.csv"
 if st.button("Retrain models", key="retrain"):
     try:
         training_path = Path(st.session_state.get("training_csv_path", csv_path))

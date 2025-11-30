@@ -1,3 +1,4 @@
+# app/train.py
 import os
 from pathlib import Path
 import pandas as pd
@@ -10,10 +11,13 @@ from app.utils import find_preprocessor_path, load_preprocessor
 from app.constants import FEATURE_COLUMNS
 
 DEFAULT_TRAINING_CSV = os.environ.get("TRAINING_CSV_PATH", "../data/german.csv")
-MODELS_DIR = os.environ.get("MODELS_DIR", "models")
+MODELS_DIR = Path(os.environ.get("MODELS_DIR", "../train_pipeline/models"))
 
 def _ensure_models_dir():
-    Path(MODELS_DIR).mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    (MODELS_DIR / "regression").mkdir(parents=True, exist_ok=True)
+    (MODELS_DIR / "ensemble").mkdir(parents=True, exist_ok=True)
+    (MODELS_DIR / "mlp").mkdir(parents=True, exist_ok=True)
 
 def _load_training_df(csv_path: str):
     df = pd.read_csv(csv_path, sep=';')
@@ -42,20 +46,25 @@ def train_and_persist_models(training_csv_path: str = DEFAULT_TRAINING_CSV):
 
     logistic = LogisticRegression(max_iter=1000)
     logistic.fit(X_proc, y)
-    joblib.dump(logistic, os.path.join(MODELS_DIR, "logistic.pkl"))
+    logistic_path = MODELS_DIR / "regression" / "logistic.pkl"
+    joblib.dump(logistic, logistic_path)
 
     rf = RandomForestClassifier(n_estimators=100)
     rf.fit(X_proc, y)
-    joblib.dump(rf, os.path.join(MODELS_DIR, "random_forest.pkl"))
+    rf_path = MODELS_DIR / "ensemble" / "random_forest.pkl"
+    joblib.dump(rf, rf_path)
 
     mlp = MLPClassifier(hidden_layer_sizes=(128, ), max_iter=400)
     mlp.fit(X_proc, y)
-    joblib.dump(mlp, os.path.join(MODELS_DIR, "mlp.pkl"))
+    mlp_path = MODELS_DIR / "mlp" / "mlp.pkl"
+    joblib.dump(mlp, mlp_path)
 
-    joblib.dump(label_encoder, os.path.join(MODELS_DIR, "label_encoder.pkl"))
+    le_path = MODELS_DIR / "label_encoder.pkl"
+    joblib.dump(label_encoder, le_path)
+
     return {
-        "logistic": os.path.join(MODELS_DIR, "logistic.pkl"),
-        "random_forest": os.path.join(MODELS_DIR, "random_forest.pkl"),
-        "mlp": os.path.join(MODELS_DIR, "mlp.pkl"),
-        "label_encoder": os.path.join(MODELS_DIR, "label_encoder.pkl"),
+        "logistic": str(logistic_path),
+        "random_forest": str(rf_path),
+        "mlp": str(mlp_path),
+        "label_encoder": str(le_path),
     }
