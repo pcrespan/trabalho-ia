@@ -9,8 +9,6 @@ if str(project_root) not in sys.path:
 import streamlit as st
 import pandas as pd
 
-from app.qwen_3 import get_model
-from app.qwen_3 import answer
 from app.feedback import save_feedback_row
 from app.train import train_and_persist_models
 from app.constants import FEATURE_COLUMNS, CATEGORICAL_OPTIONS, NUMERIC_RANGES
@@ -80,8 +78,6 @@ if st.button("Analisar", key="analyze"):
     st.session_state["input_df"] = input_df
     try:
         st.session_state["results_df"] = predict_all(preprocessor, models, input_df)
-        model, tokenizer = get_model()
-        st.session_state["llm_analysis"] = answer(model, tokenizer, st.session_state["results_df"], st.session_state["input_df"])
     except Exception as exc:
         st.error(f"Prediction failed: {exc}")
         st.session_state["show_all"] = False
