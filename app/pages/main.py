@@ -104,6 +104,7 @@ if st.session_state["show_all"]:
     if st.button("Enviar feedback", key="send_feedback"):
         st.session_state["show_all"] = True
         saved_df = st.session_state.get("input_df")
+        saved_df["Creditability"] = chosen_label
         row_source = saved_df if saved_df is not None else input_df
         input_row = {col: row_source.iloc[0][col] for col in row_source.columns}
         if model_wrong == "Sim":
