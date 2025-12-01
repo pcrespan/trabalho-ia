@@ -89,11 +89,6 @@ if st.session_state["show_all"]:
     if results_df is not None:
         st.subheader("Previsão dos modelos")
         st.table(results_df.set_index("model"))
-    st.markdown("## Análise via LLM")
-    if st.session_state.get("llm_analysis"):
-        st.write(st.session_state["llm_analysis"])
-    else:
-        st.write("Nenhuma análise disponível.")
 
     st.markdown("### Feedback")
     chosen_label = st.selectbox("Qual classificação será considerada?", ["Good", "Bad"], index=0, key="label_choice")
@@ -149,14 +144,6 @@ if st.button("Retrain models", key="retrain"):
                     ax.set_title("RandomForest loss vs n_estimators")
                     ax.set_xlabel("n_estimators")
                     ax.set_ylabel("log loss")
-                    ax.legend()
-                    st.pyplot(fig)
-                if "MLP" in histories:
-                    fig, ax = plt.subplots()
-                    ax.plot(histories["MLP"]["train_loss"], label="train")
-                    ax.set_title("MLP loss")
-                    ax.set_xlabel("iteration")
-                    ax.set_ylabel("loss")
                     ax.legend()
                     st.pyplot(fig)
                 st.write("Acurácias (teste):")
