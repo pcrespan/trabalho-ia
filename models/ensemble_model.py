@@ -7,7 +7,7 @@ from pathlib import Path
 
 class EnsembleModel(BaseModel):
     def __init__(self):
-        self.model = RandomForestClassifier(n_estimators=200)
+        self.model = RandomForestClassifier(n_estimators=50, max_depth=10, min_samples_leaf=5, min_samples_split=10, max_features="sqrt")
 
     def fit(self, X_train, y_train, X_val, y_val):
         print(self)
