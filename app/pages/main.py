@@ -11,8 +11,6 @@ import streamlit as st
 import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
 from app.feedback import save_feedback_row
 from app.train import train_and_persist_models
 from app.constants import FEATURE_COLUMNS, CATEGORICAL_OPTIONS, NUMERIC_RANGES
@@ -91,6 +89,11 @@ if st.session_state["show_all"]:
     if results_df is not None:
         st.subheader("Previsão dos modelos")
         st.table(results_df.set_index("model"))
+    st.markdown("## Análise via LLM")
+    if st.session_state.get("llm_analysis"):
+        st.write(st.session_state["llm_analysis"])
+    else:
+        st.write("Nenhuma análise disponível.")
 
     st.markdown("### Feedback")
     chosen_label = st.selectbox("Qual classificação será considerada?", ["Good", "Bad"], index=0, key="label_choice")
@@ -127,65 +130,39 @@ if st.button("Retrain models", key="retrain"):
             except Exception:
                 st.error("Não foi possível carregar os modelos.")
             try:
-                df = pd.read_csv(str(training_path), sep=';')
-                if "Creditability" not in df.columns:
-                    st.error("training csv não contém coluna 'Creditability'")
-                else:
-                    X = df[FEATURE_COLUMNS].copy()
-                    y_raw = df["Creditability"].astype(str).copy()
-                    models_dir = Path(os.environ.get("MODELS_DIR", "../train_pipeline/models"))
-                    le_path = models_dir / "label_encoder.pkl"
-                    if le_path.exists():
-                        label_encoder = joblib.load(le_path)
-                        try:
-                            y = label_encoder.transform(y_raw)
-                        except Exception:
-                            y = pd.to_numeric(y_raw, errors='coerce').fillna(0).astype(int)
-                    else:
-                        y = pd.to_numeric(y_raw, errors='coerce').fillna(0).astype(int)
-                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-                    X_train_proc = preprocessor.transform(X_train)
-                    X_test_proc = preprocessor.transform(X_test)
-                    logistic_path = models_dir / "regression" / "logistic.pkl"
-                    rf_path = models_dir / "ensemble" / "random_forest.pkl"
-                    loaded = {}
-                    if logistic_path.exists():
-                        loaded["LogisticRegression"] = joblib.load(logistic_path)
-                    if rf_path.exists():
-                        loaded["RandomForest"] = joblib.load(rf_path)
-                    train_scores = {}
-                    test_scores = {}
-                    cms = {}
-                    for name, m in loaded.items():
-                        y_train_pred = m.predict(X_train_proc)
-                        y_test_pred = m.predict(X_test_proc)
-                        train_scores[name] = accuracy_score(y_train, y_train_pred)
-                        test_scores[name] = accuracy_score(y_test, y_test_pred)
-                        cm = confusion_matrix(y_test, y_test_pred, labels=sorted(list(set(y_test))))
-                        cms[name] = (cm, sorted(list(set(y_test))))
-                    fig, ax = plt.subplots(figsize=(8, 5))
-                    names = list(train_scores.keys())
-                    train_vals = [train_scores[n] for n in names]
-                    test_vals = [test_scores[n] for n in names]
-                    x = range(len(names))
-                    ax.bar([i - 0.2 for i in x], train_vals, width=0.4)
-                    ax.bar([i + 0.2 for i in x], test_vals, width=0.4)
-                    ax.set_xticks(list(x))
-                    ax.set_xticklabels(names)
-                    ax.set_ylabel("Acurácia")
-                    ax.set_ylim(0, 1)
-                    ax.legend(["train", "test"])
+                histories = result.get("histories", {})
+                accuracies = result.get("accuracies", {})
+                if "Logistic" in histories:
+                    fig, ax = plt.subplots()
+                    ax.plot(histories["Logistic"]["train_loss"], label="train")
+                    ax.plot(histories["Logistic"]["test_loss"], label="test")
+                    ax.set_title("Logistic (SGD) loss")
+                    ax.set_xlabel("epoch")
+                    ax.set_ylabel("log loss")
+                    ax.legend()
                     st.pyplot(fig)
-                    st.write("Acurácias (treino / teste):")
-                    for n in names:
-                        st.write(f"{n}: {train_scores[n]:.4f} / {test_scores[n]:.4f}")
-                    for n, (cm, labels) in cms.items():
-                        fig2, ax2 = plt.subplots(figsize=(4, 4))
-                        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
-                        disp.plot(ax=ax2)
-                        ax2.set_title(n)
-                        st.pyplot(fig2)
+                if "RandomForest" in histories:
+                    fig, ax = plt.subplots()
+                    x = histories["RandomForest"].get("n_estimators", list(range(1, len(histories["RandomForest"]["test_loss"])+1)))
+                    ax.plot(x, histories["RandomForest"]["train_loss"], label="train")
+                    ax.plot(x, histories["RandomForest"]["test_loss"], label="test")
+                    ax.set_title("RandomForest loss vs n_estimators")
+                    ax.set_xlabel("n_estimators")
+                    ax.set_ylabel("log loss")
+                    ax.legend()
+                    st.pyplot(fig)
+                if "MLP" in histories:
+                    fig, ax = plt.subplots()
+                    ax.plot(histories["MLP"]["train_loss"], label="train")
+                    ax.set_title("MLP loss")
+                    ax.set_xlabel("iteration")
+                    ax.set_ylabel("loss")
+                    ax.legend()
+                    st.pyplot(fig)
+                st.write("Acurácias (teste):")
+                for k, v in accuracies.items():
+                    st.write(f"{k}: {v if v is None else f'{v:.4f}'}")
             except Exception as exc:
-                st.error(f"Falha ao calcular métricas: {exc}")
+                st.error(f"Falha ao mostrar históricos: {exc}")
     except Exception as exc:
         st.error(f"Retrain failed: {exc}")
